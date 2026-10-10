@@ -1,0 +1,7 @@
+# Runtime dependencies: NONE.
+# The framework is pure Python standard library (>=3.9) by design, so the
+# judge can run `python -m squad.cli demo` on a bare interpreter with no network.
+#
+# Optional, development only:
+#   pip install -r requirements.txt
+pytest>=7.4

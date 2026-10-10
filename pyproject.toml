@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "agent-squad"
+version = "0.1.0"
+description = "Multi-agent collaboration squad with self-reflection loops and closed-loop tool execution (Open Agent Hackathon 2026)."
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [{ name = "Open Agent Hackathon 2026 Team" }]
+keywords = ["multi-agent", "llm-agent", "self-reflection", "tool-use", "hackathon"]
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest>=7.4"]
+
+[project.scripts]
+squad = "squad.cli:main"
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+packages = ["squad", "squads"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = "-q"
