@@ -604,7 +604,7 @@ class Agent:
         if self._tools is not None and self._tools.specs():
             blocks.append(f"## Available tools\n{self._tools.describe()}")
 
-        if round_index > 0:
+        if round_index > 0 and reflections:
             previous = reflections[-1]
             budget = previous.usage.get("remaining_tool_calls", 0)
             blocks.append(
