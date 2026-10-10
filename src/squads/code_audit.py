@@ -136,6 +136,28 @@ def charge(account, amount):
     response = json.dumps({"account": account, "amount": amount})
     return {"ok": True, "charged": amount, "receipt": response}
 ''',
+    "tests/__init__.py": "",
+    "tests/test_audit_regression.py": '''"""Regression tests for audit findings.
+
+This file serves as a placeholder that agents can write and execute during
+the audit process. The Test Engineer agent will populate this with actual
+regression tests targeting confirmed vulnerabilities from the Security Sniffer.
+"""
+
+import unittest
+
+
+class AuditRegressionTest(unittest.TestCase):
+    """Placeholder test base - concrete tests added by the Test Engineer agent."""
+
+    def setUp(self):
+        """Prepare test fixtures."""
+        self.vulnerabilities_found = []
+
+    def test_placeholder(self):
+        """Base test that validates test infrastructure works."""
+        self.assertTrue(True)
+''',
     "README.md": """# sample-package
 
 A tiny billing/auth/data-access package used as the audit input.
@@ -269,6 +291,13 @@ def build_code_audit_squad(
 
     def make(key: str) -> Agent:
         persona = _PERSONAS[key]
+        # Increased tool budgets for better exploration and output
+        max_calls_map = {
+            "architecture": 8,   # more files to read, deeper structural analysis
+            "security": 10,      # find vulnerabilities requires extensive scanning
+            "tests": 12,         # write + execute tests needs more calls
+            "review": 6,         # reads upstream findings, doesn't scan source
+        }
         return Agent(
             "%s-%s" % (group, key),
             role=persona["role"],
@@ -277,7 +306,7 @@ def build_code_audit_squad(
             llm=provider,
             tools=registry,
             policy=ReflectionPolicy(min_score=0.75, min_dimension=0.5, max_rounds=max_rounds),
-            max_tool_calls=8 if key == "tests" else 6,
+            max_tool_calls=max_calls_map[key],
             tool_allow_dangerous=(key == "tests"),
         )
 
