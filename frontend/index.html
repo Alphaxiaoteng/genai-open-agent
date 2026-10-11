@@ -125,8 +125,8 @@
         }
 
         function getStatusText(status) {
-            const texts = { idle: 'Idle', thinking: 'Thinking', executing: 'Executing', done: 'Done', failed: 'Failed' };
-            return texts[status] || 'Unknown';
+            const texts = { idle: '待命', thinking: '推理中', executing: '执行中', done: '已完成', failed: '执行失败' };
+            return texts[status] || '未知状态';
         }
 
         function BlackboardDiffInspector({ agents, blackboardData }) {
