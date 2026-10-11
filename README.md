@@ -1,5 +1,7 @@
 # agent-squad — Multi-Agent Collaboration with Self-Reflection & Closed-Loop Tools
 
+> Judge-facing version: [`README.en.md`](README.en.md)
+
 **Open Agent Hackathon 2026 (GenAI Works)** · category: autonomous agents / multi-agent collaboration.
 
 A small, **dependency-free** (Python standard library only) framework that makes
