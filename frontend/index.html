@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Enterprise Multi-Agent Collaboration Platform</title>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://unpkg.com/antd@5.12.0/dist/antd.min.js"></script>
+    <style>
+        body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; }
+        .container { padding: 20px; }
+        .card { background: white; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); margin-bottom: 20px; }
+        .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; }
+        .status-badge { display: inline-block; padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: 600; margin-right: 8px; }
+        .status-idle { background: #e0e0e0; color: #666; }
+        .status-thinking { background: #fff3cd; color: #856404; }
+        .status-executing { background: #d1ecf1; color: #0c5460; }
+        .status-done { background: #d4edda; color: #155724; }
+        .status-failed { background: #f8d7da; color: #721c24; }
+        .metric-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin: 16px 0; }
+        .metric-card { background: #fafafa; padding: 16px; border-radius: 8px; border-left: 4px solid #667eea; }
+        .metric-label { font-size: 12px; color: #666; text-transform: uppercase; letter-spacing: 0.5px; }
+        .metric-value { font-size: 24px; font-weight: 700; color: #333; margin-top: 4px; }
+        .agent-node { min-width: 200px; background: white; border-radius: 8px; padding: 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); position: relative; }
+        .agent-role { font-size: 14px; color: #666; margin-bottom: 8px; }
+        .agent-name { font-size: 16px; font-weight: 600; color: #333; }
+        .score-display { font-size: 20px; font-weight: 700; color: #667eea; margin-top: 8px; }
+        .timeline-bar { height: 4px; background: #e0e0e0; border-radius: 2px; overflow: hidden; margin-top: 8px; }
+        .timeline-progress { height: 100%; background: linear-gradient(90deg, #667eea, #764ba2); transition: width 0.3s ease; }
+        .diff-viewer { background: #1e1e1e; color: #d4d4d4; font-family: 'Consolas', 'Monaco', monospace; padding: 16px; border-radius: 8px; max-height: 400px; overflow-y: auto; }
+        .diff-add { background: rgba(46, 160, 46, 0.2); color: #4caf50; }
+        .diff-remove { background: rgba(244, 67, 54, 0.2); color: #f44336; }
+        .action-buttons { display: flex; gap: 12px; margin-top: 16px; }
+        .gating-panel { background: #fff8e1; border-left: 4px solid #ffc107; padding: 16px; border-radius: 8px; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+    <script type="text/babel">
+        const { useState, useEffect, useCallback } = React;
+        const { Card, Button, Statistic, Progress, Tag, Timeline, Modal, message, Divider, Row, Col, Typography, Space } = antd;
+        const { Title, Text } = Typography;
+
+        const AGENT_ROLES = {
+            'audit-architecture': { role: '架构师', icon: '🏛️' },
+            'audit-security': { role: '安全审计师', icon: '🔒' },
+            'audit-tests': { role: '测试工程师', icon: '🧪' },
+            'audit-review': { role: '代码评审师', icon: '📋' }
+        };
+
+        const DAG_NODE_POSITIONS = {
+            'audit-architecture': { x: 400, y: 100 },
+            'audit-security': { x: 100, y: 250 },
+            'audit-tests': { x: 100, y: 400 },
+            'audit-review': { x: 400, y: 400 }
+        };
+
+        function DAGVisualizer({ agents, executionData }) {
+            const getNodeStyle = (agentName) => {
+                const data = executionData[agentName] || {};
+                let statusClass = 'status-idle';
+                if (data.status === 'thinking') statusClass = 'status-thinking';
+                else if (data.status === 'executing') statusClass = 'status-executing';
+                else if (data.status === 'done') statusClass = 'status-done';
+                else if (data.status === 'failed') statusClass = 'status-failed';
+                
+                return {
+                    ...DAG_NODE_POSITIONS[agentName],
+                    style: {
+                        position: 'absolute',
+                        left: `${DAG_NODE_POSITIONS[agentName].x}px`,
+                        top: `${DAG_NODE_POSITIONS[agentName].y}px`,
+                        transform: 'translate(-50%, -50%)',
+                        padding: '20px',
+                        background: 'white',
+                        borderRadius: '12px',
+                        boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
+                        border: `3px solid ${data.score ? '#667eea' : '#e0e0e0'}`
+                    }
+                };
+            };
+
+            const renderConnection = (from, to) => {
+                const fromPos = DAG_NODE_POSITIONS[from];
+                const toPos = DAG_NODE_POSITIONS[to];
+                const path = `M ${fromPos.x} ${fromPos.y + 80} L ${toPos.x} ${toPos.y - 80}`;
+                return <path key={`${from}-${to}`} d={path} stroke="#667eea" strokeWidth="2" fill="none" strokeDasharray="5,5" />;
+            };
+
+            return (
+                <div style={{ position: 'relative', width: '600px', height: '600px', background: '#fafafa', borderRadius: '12px', border: '1px solid #e0e0e0', overflow: 'hidden' }}>
+                    <svg style={{ position: 'absolute', width: '100%', height: '100%' }}>
+                        {renderConnection('audit-architecture', 'audit-security')}
+                        {renderConnection('audit-security', 'audit-tests')}
+                        {renderConnection('audit-tests', 'audit-review')}
+                    </svg>
+                    {Object.keys(AGENT_ROLES).map(name => (
+                        <div key={name} {...getNodeStyle(name)}>
+                            <Text style={{ fontSize: '20px' }}>{AGENT_ROLES[name].icon} {AGENT_ROLES[name].role}</Text>
+                            <Text strong style={{ display: 'block', marginTop: '8px' }}>{name}</Text>
+                            {executionData[name]?.score && (
+                                <Title level={4} style={{ color: '#667eea', margin: '8px 0 0' }}>
+                                    Score: {executionData[name].score.toFixed(3)}
+                                </Title>
+                            )}
+                            <div className={`status-badge ${getStatusClass(executionData[name]?.status)}`}>
+                                {getStatusText(executionData[name]?.status)}
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            );
+        };
+
+        function getStatusClass(status) {
+            switch(status) {
+                case 'thinking': return 'status-thinking';
+                case 'executing': return 'status-executing';
+                case 'done': return 'status-done';
+                case 'failed': return 'status-failed';
+                default: return 'status-idle';
+            }
+        }
+
+        function getStatusText(status) {
+            const texts = { idle: 'Idle', thinking: 'Thinking', executing: 'Executing', done: 'Done', failed: 'Failed' };
+            return texts[status] || 'Unknown';
+        }
+
+        function BlackboardDiffInspector({ agents, blackboardData }) {
+            const [selectedAgent, setSelectedAgent] = useState(null);
+            
+            const handleNodeClick = (agentName) => {
+                setSelectedAgent(agentName);
+            };
+
+            return (
+                <Row gutter={[16, 16]}>
+                    <Col span={12}>
+                        <Card title="点击节点查看详情">
+                            {agents.map(agent => (
+                                <Button 
+                                    key={agent} 
+                                    onClick={() => handleNodeClick(agent)}
+                                    style={{ marginRight: '8px', marginBottom: '8px', display: 'inline-flex', alignItems: 'center' }}
+                                >
+                                    {AGENT_ROLES[agent]?.icon} {AGENT_ROLES[agent]?.role}
+                                </Button>
+                            ))}
+                        </Card>
+                    </Col>
+                    <Col span={12}>
+                        <Card title="黑板变更详情">
+                            {selectedAgent && blackboardData[selectedAgent] ? (
+                                <div className="diff-viewer">
+                                    <pre>{JSON.stringify(blackboardData[selectedAgent], null, 2)}</pre>
+                                </div>
+                            ) : (
+                                <Text type="secondary">请选择一个 Agent 节点查看其输出</Text>
+                            )}
+                        </Card>
+                    </Col>
+                </Row>
+            );
+        }
+
+        function HILReviewGating({ reviewResult, onApprove, onReject }) {
+            const [showModal, setShowModal] = useState(false);
+            const [feedback, setFeedback] = useState('');
+            
+            if (!reviewResult) return null;
+
+            const handleSubmit = () => {
+                if (feedback.trim()) {
+                    onReject(feedback);
+                } else {
+                    onApprove();
+                }
+                setShowModal(false);
+            };
+
+            return (
+                <Card title="🎯 人机协同干预闸口" className="gating-panel">
+                    <Text>当前评审状态：{reviewResult.status}</Text>
+                    <Text>综合评分：{reviewResult.overallScore?.toFixed(3)}</Text>
+                    <Divider />
+                    <Space>
+                        <Button type="primary" onClick={() => setShowModal(true)}>审批通过 ✅</Button>
+                        <Button danger onClick={() => setShowModal(true)}>打回要求补充 ❌</Button>
+                    </Space>
+                    
+                    <Modal
+                        title={feedback ? "提供改进反馈" : "确认审批"}
+                        open={showModal}
+                        onOk={handleSubmit}
+                        onCancel={() => setShowModal(false)}
+                        okText={feedback ? "提交反馈并打回" : "批准执行"}
+                        cancelText="取消"
+                    >
+                        {feedback && (
+                            <input
+                                value={feedback}
+                                onChange={(e) => setFeedback(e.target.value)}
+                                placeholder="请输入需要补充的测试类型或修改建议..."
+                                style={{ width: '100%', padding: '8px', marginTop: '16px' }}
+                            />
+                        )}
+                    </Modal>
+                </Card>
+            );
+        }
+
+        function App() {
+            const [executionData, setExecutionData] = useState({});
+            const [blackboardData, setBlackboardData] = useState({});
+            const [reviewResult, setReviewResult] = useState(null);
+            const [metrics, setMetrics] = useState({ totalAgents: 0, avgScore: 0, totalTokens: 0, totalDuration: 0 });
+
+            // Simulate WebSocket connection
+            useEffect(() => {
+                const ws = new WebSocket('ws://localhost:8000/ws');
+                
+                ws.onopen = () => {
+                    console.log('Connected to squad execution events');
+                };
+
+                ws.onmessage = (event) => {
+                    const data = JSON.parse(event.data);
+                    updateExecutionState(data);
+                };
+
+                ws.onerror = (error) => {
+                    console.error('WebSocket error:', error);
+                };
+
+                return () => ws.close();
+            }, []);
+
+            const updateExecutionState = (event) => {
+                if (event.type === 'agent_result') {
+                    const { agent, score, elapsed_ms, output } = event;
+                    setExecutionData(prev => ({
+                        ...prev,
+                        [agent]: {
+                            status: 'done',
+                            score,
+                            elapsed_ms,
+                            output
+                        }
+                    }));
+                    setMetrics(prev => ({
+                        ...prev,
+                        totalAgents: prev.totalAgents + 1,
+                        avgScore: calculateAverageScore(Object.values(prev).filter(a => a.score)),
+                        totalDuration: prev.totalDuration + elapsed_ms
+                    }));
+                } else if (event.type === 'blackboard_update') {
+                    const { agent, findings } = event;
+                    setBlackboardData(prev => ({
+                        ...prev,
+                        [agent]: findings
+                    }));
+                } else if (event.type === 'review_complete') {
+                    setReviewResult(event.result);
+                }
+            };
+
+            const calculateAverageScore = (scores) => {
+                if (scores.length === 0) return 0;
+                return scores.reduce((a, b) => a + b.score, 0) / scores.length;
+            };
+
+            const handleApprove = () => {
+                message.success('✅ 审批通过，智能体继续执行后续任务');
+            };
+
+            const handleReject = (feedback) => {
+                message.info(`❌ 已打回 - 反馈：${feedback}`);
+                // In production, this would send feedback back to the LLM for re-execution
+            };
+
+            return (
+                <div className="container">
+                    <div className="header">
+                        <Title level={2} style={{ color: 'white', margin: 0 }}>
+                            🚀 Enterprise Multi-Agent Collaboration Platform
+                        </Title>
+                        <Text type="secondary">多智能体协作 DAG 拓扑执行看板</Text>
+                    </div>
+
+                    <Card className="card">
+                        <Title level={3}>📊 实时执行指标</Title>
+                        <div className="metric-grid">
+                            <Card className="metric-card">
+                                <Text className="metric-label">总智能体数</Text>
+                                <Statistic value={metrics.totalAgents} suffix="/4" />
+                            </Card>
+                            <Card className="metric-card">
+                                <Text className="metric-label">平均得分</Text>
+                                <Statistic value={metrics.avgScore?.toFixed(3)} prefix="Score: " />
+                            </Card>
+                            <Card className="metric-card">
+                                <Text className="metric-label">Token 消耗</Text>
+                                <Statistic value={metrics.totalTokens} suffix="K" />
+                            </Card>
+                            <Card className="metric-card">
+                                <Text className="metric-label">总耗时</Text>
+                                <Statistic value={metrics.totalDuration?.toFixed(0)} suffix="ms" />
+                            </Card>
+                        </div>
+                    </Card>
+
+                    <DAGVisualizer agents={Object.keys(AGENT_ROLES)} executionData={executionData} />
+
+                    <BlackboardDiffInspector agents={Object.keys(AGENT_ROLES)} blackboardData={blackboardData} />
+
+                    <HILReviewGating reviewResult={reviewResult} onApprove={handleApprove} onReject={handleReject} />
+                </div>
+            );
+        }
+
+        ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+    </script>
+</body>
+</html>

@@ -292,11 +292,12 @@ def build_code_audit_squad(
     def make(key: str) -> Agent:
         persona = _PERSONAS[key]
         # Increased tool budgets for better exploration and output
+        # Key insight: agents need sufficient budget to read all files + execute tools
         max_calls_map = {
-            "architecture": 8,   # more files to read, deeper structural analysis
-            "security": 10,      # find vulnerabilities requires extensive scanning
-            "tests": 12,         # write + execute tests needs more calls
-            "review": 6,         # reads upstream findings, doesn't scan source
+            "architecture": 10,   # deep structural analysis needs more reads + searches
+            "security": 12,       # vulnerability scanning requires extensive exploration
+            "tests": 14,          # write tests + execute them needs substantial calls
+            "review": 8,          # synthesizes findings from upstream namespaces
         }
         return Agent(
             "%s-%s" % (group, key),
